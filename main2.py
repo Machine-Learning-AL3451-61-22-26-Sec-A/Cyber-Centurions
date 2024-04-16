@@ -1,41 +1,73 @@
 import streamlit as st
-import pandas as pd
-from sklearn.datasets import load_iris
-from sklearn.tree import DecisionTreeClassifier, export_text
 
-# Define the Streamlit app
+class CandidateElimination:
+    def __init__(self, num_attributes):
+        self.S = [set() for _ in range(num_attributes)]  # most specific hypothesis
+        self.G = [set() for _ in range(num_attributes)]  # most general hypothesis
+        self.num_attributes = num_attributes
+
+    def fit(self, data):
+        for instance in data:
+            target = instance[-1]  # Assuming the last attribute is the target
+
+            if target == "yes":  # Positive example
+                self.specialize(instance[:-1])
+            else:  # Negative example
+                self.generalize(instance[:-1])
+
+    def specialize(self, instance):
+        for i in range(len(instance)):
+            if instance[i] not in self.S[i]:
+                self.S[i].add(instance[i])
+
+            # Remove more general hypotheses inconsistent with the example
+            remove_indices = []
+            for j in range(len(self.G[i])):
+                if self.G[i].pop() not in instance:
+                    remove_indices.append(j)
+            for index in remove_indices:
+                if index < len(self.G[i]):  # Check if index is still within bounds
+                    self.G[i].pop(index)
+
+    def generalize(self, instance):
+        for i in range(len(instance)):
+            # Remove more specific hypotheses inconsistent with the example
+            remove_indices = []
+            for j in range(len(self.S[i])):
+                if self.S[i].pop() != instance[i]:
+                    remove_indices.append(j)
+            for index in remove_indices:
+                if index < len(self.S[i]):  # Check if index is still within bounds
+                    self.S[i].pop(index)
+
+            if instance[i] not in self.G[i]:
+                self.G[i].add(instance[i])
+
+    def get_hypotheses(self):
+        return self.S, self.G
+
 def main():
-    st.title("ID3 Algorithm Demo")
+    st.title("Candidate Elimination Algorithm")
 
-    # Load the Iris dataset
-    iris = load_iris()
-    X = pd.DataFrame(iris.data, columns=iris.feature_names)
-    y = pd.Series(iris.target)
+    # Example dataset
+    data = [
+        ['sunny', 'warm', 'normal', 'strong', 'warm', 'same', 'yes'],
+        ['sunny', 'warm', 'high', 'strong', 'warm', 'same', 'yes'],
+        ['rainy', 'cold', 'high', 'strong', 'warm', 'change', 'no'],
+        ['sunny', 'warm', 'high', 'strong', 'cool', 'change', 'yes']
+    ]
 
-    # Display the dataset
-    st.subheader("Iris Dataset")
-    st.write(X)
+    ce = CandidateElimination(num_attributes=len(data[0])-1)
+    ce.fit(data)
+    S, G = ce.get_hypotheses()
 
-    # Create a decision tree model
-    clf = DecisionTreeClassifier(criterion="entropy")
-    clf.fit(X, y)
+    st.subheader("Final Specific Hypothesis:")
+    for hypothesis in S:
+        st.write(hypothesis)
 
-    # Display the decision tree rules
-    st.subheader("Decision Tree Rules")
-    rules = export_text(clf, feature_names=iris.feature_names)
-    st.text_area("Decision Tree Rules", rules, height=300)
+    st.subheader("Final General Hypothesis:")
+    for hypothesis in G:
+        st.write(hypothesis)
 
-    # Make a prediction
-    st.subheader("Make Prediction")
-    input_features = {}
-    for feature in X.columns:
-        input_features[feature] = st.number_input(f"Enter {feature}", value=0.0)
-
-    if st.button("Predict"):
-        instance = pd.DataFrame([input_features])
-        prediction = clf.predict(instance)
-        st.success(f"The predicted class is {iris.target_names[prediction[0]]}")
-
-# Run the app
 if __name__ == "__main__":
     main()
